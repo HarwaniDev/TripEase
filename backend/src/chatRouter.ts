@@ -51,7 +51,6 @@ chatRouter.post("/send", Middleware, async(req,res) => {
         "role": "assistant",
         content: readableAns
     });
-    // console.log(readableAns);
 
     await chat?.save();
 

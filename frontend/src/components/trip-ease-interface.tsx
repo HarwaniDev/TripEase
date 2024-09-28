@@ -10,6 +10,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Menu, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown } from 'lucide-react'
 import { addDays } from 'date-fns'
+import { useRouter } from 'next/navigation'
 
 type ChatHistory = {
   id: string
@@ -39,38 +40,48 @@ const chatHistory: ChatHistory[] = [
 export function TripEaseInterfaceComponent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [darkMode, setDarkMode] = useState(false)
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined)
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  // const [showScrollButton, setShowScrollButton] = useState(false)
+  const [initialChatId, setInitialChatId] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+  const router = useRouter();
 
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode)
   }, [darkMode])
 
-  // useEffect(() => {
-  //   const scrollArea = scrollAreaRef.current
-  //   if (scrollArea) {
-  //     const handleScroll = () => {
-  //       const { scrollTop, scrollHeight, clientHeight } = scrollArea
-  //       setShowScrollButton(scrollTop < scrollHeight - clientHeight - 100)
-  //     }
-  //     scrollArea.addEventListener('scroll', handleScroll)
-  //     handleScroll() // Check initial scroll position
-  //     return () => scrollArea.removeEventListener('scroll', handleScroll)
-  //   }
-  // }, [])
+  async function getInitialChatId() {
+    const authorization = localStorage.getItem('token');
+    const headers = {
+      "Content-Type": "application/json",
+      ...(authorization && { "authorization": authorization }), // Add authorization only if it's not null
+    };
+    await fetch("http://localhost:3000/chat/newchat", {
+      method: "POST",
+      headers: headers,
+    }).then((res) => {
+      res.json()
+        .then((data) => {
+          // console.log(data.id);
+          setInitialChatId(data.id);
+        })
+    })
+  }
+  useEffect(() => {
+    getInitialChatId();
+  }, [])
 
-  // useEffect(() => {
-  //   scrollToBottom()
-  // }, [messages])
 
   const handleLogout = () => {
-    // Implement logout functionality here
-    console.log("Logout clicked")
+    localStorage.removeItem('token');
+    router.push("/");
+
   }
 
   const today = new Date()
@@ -94,46 +105,58 @@ export function TripEaseInterfaceComponent() {
     setEndDate(date)
   }
 
-  const generateBotResponse = (userMessage: string) => {
-    const lowercaseMessage = userMessage.toLowerCase()
-    if (lowercaseMessage.includes('hello') || lowercaseMessage.includes('hi')) {
-      return "Hello! How can I assist you with your travel plans today?"
-    } else if (lowercaseMessage.includes('book') || lowercaseMessage.includes('reservation')) {
-      return "I'd be happy to help you with a booking or reservation. Could you please provide more details about your destination and dates?"
-    } else if (lowercaseMessage.includes('recommend') || lowercaseMessage.includes('suggestion')) {
-      return "I'd love to offer some recommendations! What type of travel experience are you looking for? Relaxation, adventure, cultural exploration, or something else?"
-    } else if (lowercaseMessage.includes('price') || lowercaseMessage.includes('cost')) {
-      return "Prices can vary depending on the specifics of your trip. Could you give me more information about your destination, accommodation preferences, and travel dates? I'll do my best to provide you with accurate pricing information."
-    } else if (lowercaseMessage.includes('thank')) {
-      return "You're welcome! I'm glad I could assist you. Is there anything else you'd like to know about your travel plans?"
-    } else {
-      return `Thank you for your message about "${userMessage}". I'm processing your request and will assist you shortly with your travel plans. Could you please provide more details about what you're looking for?`
-    }
+  const generateBotResponse = async (userMessage: string) => {
+    var botResponse;
+    const authorization = localStorage.getItem('token');
+    const headers = {
+      "Content-Type": "application/json",
+      ...(authorization && { "authorization": authorization }), // Add authorization only if it's not null
+    };
+    await fetch(`http://localhost:3000/chat/send?id=${initialChatId}`, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify({
+        message: inputMessage
+      })
+    }).then((res) => {
+      res.json()
+        .then((data) => {
+          botResponse = data.response
+        })
+    })
+    return botResponse;
   }
 
   const simulateBotResponse = async (userMessage: string) => {
     setIsStreaming(true)
-    const botMessage = generateBotResponse(userMessage)
+    const botMessage = await generateBotResponse(userMessage)
     const newMessage: Message = { id: Date.now().toString(), content: '', role: 'bot', isStreaming: true }
     setMessages(prev => [...prev, newMessage])
 
-    for (let i = 0; i < botMessage.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 20))
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === newMessage.id 
-            ? { ...msg, content: botMessage.slice(0, i + 1) } 
-            : msg
+    if (botMessage && typeof botMessage === 'string') {
+      //@ts-ignore
+      for (let i = 0; i < botMessage.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 20))
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === newMessage.id
+            //@ts-ignore
+              ? { ...msg, content: botMessage.slice(0, i + 1) }
+              : msg
+          )
         )
-      )
+      }
     }
-    setMessages(prev => 
-      prev.map(msg => 
-        msg.id === newMessage.id 
-          ? { ...msg, isStreaming: false } 
+
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === newMessage.id
+          ? { ...msg, isStreaming: false }
           : msg
       )
     )
+    console.log(messages);
+    
     setIsStreaming(false)
   }
 
@@ -147,14 +170,6 @@ export function TripEaseInterfaceComponent() {
     await simulateBotResponse(inputMessage)
   }
 
-  // const scrollToBottom = () => {
-  //   if (scrollAreaRef.current) {
-  //     scrollAreaRef.current.scrollTo({
-  //       top: scrollAreaRef.current.scrollHeight,
-  //       behavior: 'smooth'
-  //     })
-  //   }
-  // }
 
   return (
     <div className={`flex h-screen ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-100 text-gray-900'}`}>
@@ -277,13 +292,12 @@ export function TripEaseInterfaceComponent() {
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[80%] p-3 rounded-lg ${
-                          message.role === 'user'
-                            ? 'bg-blue-500 text-white'
-                            : darkMode
+                        className={`max-w-[80%] p-3 rounded-lg ${message.role === 'user'
+                          ? 'bg-blue-500 text-white'
+                          : darkMode
                             ? 'bg-gray-700 text-gray-100'
                             : 'bg-gray-200 text-gray-900'
-                        }`}
+                          }`}
                       >
                         {message.content}
                         {message.isStreaming && <span className="animate-pulse ml-1">...</span>}
@@ -294,18 +308,6 @@ export function TripEaseInterfaceComponent() {
               )}
             </div>
           </ScrollArea>
-
-          {/* Scroll to bottom button */}
-          {/* {showScrollButton && (
-            <Button
-              className="absolute bottom-4 right-4 rounded-full shadow-md"
-              size="icon"
-              onClick={scrollToBottom}
-              aria-label="Scroll to bottom"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          )} */}
         </div>
 
         {/* Input area */}
@@ -317,7 +319,7 @@ export function TripEaseInterfaceComponent() {
               rows={1}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   handleSendMessage()
@@ -344,9 +346,6 @@ export function TripEaseInterfaceComponent() {
                 ></path>
               </svg>
             </Button>
-          </div>
-          <div className="text-center mt-2 text-sm text-gray-400">
-            TripEase can make mistakes. Check important info.
           </div>
         </div>
       </div>

@@ -46,15 +46,25 @@ export function AuthPageComponent() {
       res.json().then((data) => {
         localStorage.setItem('token', data.token);
         if(data.status !== 200){
-          console.log(data.message);
-          toast({
-            title: "error",
-            description: data.message,
-            variant: 'destructive'
-          })
+          // console.log(data.message);
+          if(data.message.message){
+            toast({
+              title: "error",
+              description: data.message.message,
+              variant: 'destructive'
+            })
+          }
+          else{
+            toast({
+              title: "error",
+              description: data.message,
+              variant: 'destructive'
+            })
+          }
         }
         else{
-          router.push("http://localhost:3001/plan");
+          
+          router.push("/plan");
         }
       })
     })
@@ -76,15 +86,23 @@ export function AuthPageComponent() {
       res.json().then((data) => {
         localStorage.setItem('token', data.token);
         if(data.status !== 200){
-          console.log(data.message.message);
-          toast({
-            title: "error",
-            description: data.message.message,
-            variant: 'destructive'
-          })
+          if(data.message.message){
+            toast({
+              title: "error",
+              description: data.message.message,
+              variant: 'destructive'
+            })
+          }
+          else {
+            toast({
+              title: "error",
+              description: data.message,
+              variant: 'destructive'
+            })
+          }
         }
         else{
-          router.push("http://localhost:3001/plan");
+          router.push("/plan");
         }
       })
     })
