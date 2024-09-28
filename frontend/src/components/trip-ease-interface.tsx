@@ -1,0 +1,340 @@
+"use client"
+
+import { useState, useEffect, useRef } from 'react'
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { Input } from "@/components/ui/input"
+import { Menu, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown } from 'lucide-react'
+
+type ChatHistory = {
+  id: string
+  title: string
+  date: string
+}
+
+type Message = {
+  id: string
+  content: string
+  role: 'user' | 'bot'
+  isStreaming?: boolean
+}
+
+const chatHistory: ChatHistory[] = [
+  { id: '1', title: 'Paris Trip Planning', date: 'Yesterday' },
+  { id: '2', title: 'Tokyo Itinerary', date: 'Yesterday' },
+  { id: '3', title: 'New York City Hotels', date: 'Yesterday' },
+  { id: '4', title: 'Bali Beach Recommendations', date: 'Yesterday' },
+  { id: '5', title: 'Rome Historical Sites', date: 'Previous 7 Days' },
+  { id: '6', title: 'London Budget Travel', date: 'Previous 7 Days' },
+  { id: '7', title: 'Barcelona Food Tour', date: 'Previous 7 Days' },
+  { id: '8', title: 'Sydney Opera House Tickets', date: 'Previous 7 Days' },
+  { id: '9', title: 'Amsterdam Canal Cruise', date: 'Previous 7 Days' },
+]
+
+export function TripEaseInterfaceComponent() {
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [darkMode, setDarkMode] = useState(false)
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inputMessage, setInputMessage] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    document.body.classList.toggle('dark', darkMode)
+  }, [darkMode])
+
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current
+    if (scrollArea) {
+      const handleScroll = () => {
+        const { scrollTop, scrollHeight, clientHeight } = scrollArea
+        setShowScrollButton(scrollTop < scrollHeight - clientHeight - 100)
+      }
+      scrollArea.addEventListener('scroll', handleScroll)
+      handleScroll() // Check initial scroll position
+      return () => scrollArea.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleLogout = () => {
+    // Implement logout functionality here
+    console.log("Logout clicked")
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const isDateDisabled = (date: Date) => {
+    return date < today
+  }
+
+  const generateBotResponse = (userMessage: string) => {
+    const lowercaseMessage = userMessage.toLowerCase()
+    if (lowercaseMessage.includes('hello') || lowercaseMessage.includes('hi')) {
+      return "Hello! How can I assist you with your travel plans today?"
+    } else if (lowercaseMessage.includes('book') || lowercaseMessage.includes('reservation')) {
+      return "I'd be happy to help you with a booking or reservation. Could you please provide more details about your destination and dates?"
+    } else if (lowercaseMessage.includes('recommend') || lowercaseMessage.includes('suggestion')) {
+      return "I'd love to offer some recommendations! What type of travel experience are you looking for? Relaxation, adventure, cultural exploration, or something else?"
+    } else if (lowercaseMessage.includes('price') || lowercaseMessage.includes('cost')) {
+      return "Prices can vary depending on the specifics of your trip. Could you give me more information about your destination, accommodation preferences, and travel dates? I'll do my best to provide you with accurate pricing information."
+    } else if (lowercaseMessage.includes('thank')) {
+      return "You're welcome! I'm glad I could assist you. Is there anything else you'd like to know about your travel plans?"
+    } else {
+      return `Thank you for your message about "${userMessage}". I'm processing your request and will assist you shortly with your travel plans. Could you please provide more details about what you're looking for?`
+    }
+  }
+
+  const simulateBotResponse = async (userMessage: string) => {
+    setIsStreaming(true)
+    const botMessage = generateBotResponse(userMessage)
+    const newMessage: Message = { id: Date.now().toString(), content: '', role: 'bot', isStreaming: true }
+    setMessages(prev => [...prev, newMessage])
+
+    for (let i = 0; i < botMessage.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20))
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === newMessage.id 
+            ? { ...msg, content: botMessage.slice(0, i + 1) } 
+            : msg
+        )
+      )
+    }
+    setMessages(prev => 
+      prev.map(msg => 
+        msg.id === newMessage.id 
+          ? { ...msg, isStreaming: false } 
+          : msg
+      )
+    )
+    setIsStreaming(false)
+  }
+
+  const handleSendMessage = async () => {
+    if (inputMessage.trim() === '') return
+
+    const userMessage: Message = { id: Date.now().toString(), content: inputMessage, role: 'user' }
+    setMessages(prev => [...prev, userMessage])
+    setInputMessage('')
+
+    await simulateBotResponse(inputMessage)
+  }
+
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  }
+
+  return (
+    <div className={`flex h-screen ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-100 text-gray-900'}`}>
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 ease-in-out overflow-hidden flex flex-col ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
+        <div className="p-4 flex justify-between items-center">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+            <Menu className="h-6 w-6" />
+          </Button>
+          <Button variant="ghost" size="sm">
+            New chat
+          </Button>
+        </div>
+        <ScrollArea className="flex-grow">
+          <div className="p-2 space-y-2">
+            {chatHistory.map((chat) => (
+              <Button key={chat.id} variant="ghost" className="w-full justify-start text-left">
+                <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{chat.title}</span>
+              </Button>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        {/* Top bar */}
+        <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}>
+          {!sidebarOpen && (
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
+              <Menu className="h-6 w-6" />
+            </Button>
+          )}
+          <div className="flex items-center">
+            <span className="font-semibold">TripEase</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Sun className="h-4 w-4" />
+              <Switch
+                checked={darkMode}
+                onCheckedChange={setDarkMode}
+                aria-label="Toggle dark mode"
+              />
+              <Moon className="h-4 w-4" />
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Settings className="h-6 w-6" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40">
+                <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Chat area */}
+        <div className="flex-grow overflow-hidden relative">
+          <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
+            <div className="max-w-2xl mx-auto">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full space-y-6">
+                  <div className="text-center">
+                    <div className={`${darkMode ? 'bg-gray-700' : 'bg-gray-300'} rounded-full p-4 inline-block mb-4`}>
+                      <MessageSquare className="h-8 w-8" />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-4">Plan your trip with TripEase</h2>
+                  </div>
+                  <div className="flex space-x-4 w-full">
+                    <Input placeholder="From" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
+                    <Input placeholder="To" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
+                  </div>
+                  <div className="flex space-x-4 w-full">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100 hover:bg-gray-600' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>
+                          {startDate ? startDate.toDateString() : "Start Date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={startDate}
+                          onSelect={setStartDate}
+                          disabled={isDateDisabled}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100 hover:bg-gray-600' : 'bg-white text-gray-900 hover:bg-gray-100'}`}>
+                          {endDate ? endDate.toDateString() : "End Date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={setEndDate}
+                          disabled={isDateDisabled}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-[80%] p-3 rounded-lg ${
+                          message.role === 'user'
+                            ? 'bg-blue-500 text-white'
+                            : darkMode
+                            ? 'bg-gray-700 text-gray-100'
+                            : 'bg-gray-200 text-gray-900'
+                        }`}
+                      >
+                        {message.content}
+                        {message.isStreaming && <span className="animate-pulse ml-1">...</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Scroll to bottom button */}
+          {showScrollButton && (
+            <Button
+              className="absolute bottom-4 right-4 rounded-full shadow-md"
+              size="icon"
+              onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {/* Input area */}
+        <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}>
+          <div className="max-w-3xl mx-auto relative">
+            <Textarea
+              placeholder="Message TripEase..."
+              className={`w-full pr-10 ${darkMode ? 'bg-gray-700 border-gray-600 focus:border-gray-500 text-gray-100' : 'bg-white border-gray-300 focus:border-gray-400 text-gray-900'}`}
+              rows={1}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
+            />
+            <Button
+              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+              size="icon"
+              variant="ghost"
+              onClick={handleSendMessage}
+              disabled={isStreaming}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+                fill="none"
+                className="h-4 w-4 m-1 m-0"
+                strokeWidth="2"
+              >
+                <path
+                  d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z"
+                  fill="currentColor"
+                ></path>
+              </svg>
+            </Button>
+          </div>
+          <div className="text-center mt-2 text-sm text-gray-400">
+            TripEase can make mistakes. Check important info.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
