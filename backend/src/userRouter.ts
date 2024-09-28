@@ -15,19 +15,17 @@ userRouter.post("/signup", async(req,res) => {
 
     const parsedInput = signupTypes.safeParse({firstName, lastName, email, password});
 
-    if(!parsedInput.success){
-        var issues: string[] = [];
-        parsedInput.error.issues.map((issue) => {
-            issues.push(issue.message);
-        })
+    if(!parsedInput.success){   
         return res.status(404).json({
-            message: issues
+            status: 404,
+            message: parsedInput.error.issues[0]
         });
     }
     
     const user = await User.findOne({email});
     if(user){
         return res.status(405).json({
+            status: 405,
             message: "This email is already registered with us"
         });
     }
@@ -36,7 +34,7 @@ userRouter.post("/signup", async(req,res) => {
     await newUser.save();
     
     return res.status(200).json({
-        message: "new user registered successfully",
+        status: 200,
         token: jwt.sign(parsedInput.data.email, process.env.JWT_SECRET as string)
     });    
 });
@@ -46,22 +44,21 @@ userRouter.post("/login", async(req,res) => {
     
     const parsedInput = loginTypes.safeParse({email, password});
     if(!parsedInput.success){
-        var issues: string[] = [];
-        parsedInput.error.issues.map((issue) => {
-            issues.push(issue.message);
-        })
         return res.status(404).json({
-            message: issues
+            status: 404,
+            message: parsedInput.error.issues[0]
         });
     }
 
     const findUser = await User.findOne({email:parsedInput.data.email, password: parsedInput.data.password});
     if(!findUser){
         return res.status(411).json({
+            status: 411,
             message: "No user found with given credentials"
         })
     }
     return res.status(200).json({
+        status: 200,
         token: jwt.sign(parsedInput.data.email, process.env.JWT_SECRET as string)
     });
 });

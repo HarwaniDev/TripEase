@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Menu, MessageSquare, Settings, Sun, Moon, LogOut, ChevronDown } from 'lucide-react'
+import { addDays } from 'date-fns'
 
 type ChatHistory = {
   id: string
@@ -43,29 +44,29 @@ export function TripEaseInterfaceComponent() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [showScrollButton, setShowScrollButton] = useState(false)
+  // const [showScrollButton, setShowScrollButton] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode)
   }, [darkMode])
 
-  useEffect(() => {
-    const scrollArea = scrollAreaRef.current
-    if (scrollArea) {
-      const handleScroll = () => {
-        const { scrollTop, scrollHeight, clientHeight } = scrollArea
-        setShowScrollButton(scrollTop < scrollHeight - clientHeight - 100)
-      }
-      scrollArea.addEventListener('scroll', handleScroll)
-      handleScroll() // Check initial scroll position
-      return () => scrollArea.removeEventListener('scroll', handleScroll)
-    }
-  }, [])
+  // useEffect(() => {
+  //   const scrollArea = scrollAreaRef.current
+  //   if (scrollArea) {
+  //     const handleScroll = () => {
+  //       const { scrollTop, scrollHeight, clientHeight } = scrollArea
+  //       setShowScrollButton(scrollTop < scrollHeight - clientHeight - 100)
+  //     }
+  //     scrollArea.addEventListener('scroll', handleScroll)
+  //     handleScroll() // Check initial scroll position
+  //     return () => scrollArea.removeEventListener('scroll', handleScroll)
+  //   }
+  // }, [])
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+  // useEffect(() => {
+  //   scrollToBottom()
+  // }, [messages])
 
   const handleLogout = () => {
     // Implement logout functionality here
@@ -77,6 +78,20 @@ export function TripEaseInterfaceComponent() {
 
   const isDateDisabled = (date: Date) => {
     return date < today
+  }
+
+  const handleStartDateChange = (date: Date | undefined) => {
+    setStartDate(date)
+    if (date && endDate && date > endDate) {
+      setEndDate(addDays(date, 1))
+    }
+  }
+
+  const handleEndDateChange = (date: Date | undefined) => {
+    if (date && startDate && date < startDate) {
+      setStartDate(addDays(date, -1))
+    }
+    setEndDate(date)
   }
 
   const generateBotResponse = (userMessage: string) => {
@@ -132,14 +147,14 @@ export function TripEaseInterfaceComponent() {
     await simulateBotResponse(inputMessage)
   }
 
-  const scrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth'
-      })
-    }
-  }
+  // const scrollToBottom = () => {
+  //   if (scrollAreaRef.current) {
+  //     scrollAreaRef.current.scrollTo({
+  //       top: scrollAreaRef.current.scrollHeight,
+  //       behavior: 'smooth'
+  //     })
+  //   }
+  // }
 
   return (
     <div className={`flex h-screen ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-100 text-gray-900'}`}>
@@ -149,16 +164,16 @@ export function TripEaseInterfaceComponent() {
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
             <Menu className="h-6 w-6" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="outline" size="lg">
             New chat
           </Button>
         </div>
         <ScrollArea className="flex-grow">
           <div className="p-2 space-y-2">
             {chatHistory.map((chat) => (
-              <Button key={chat.id} variant="ghost" className="w-full justify-start text-left">
+              <Button key={chat.id} variant="ghost" className="w-full justify-start text-left text-wrap">
                 <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{chat.title}</span>
+                <span >{chat.title}</span>
               </Button>
             ))}
           </div>
@@ -175,7 +190,7 @@ export function TripEaseInterfaceComponent() {
             </Button>
           )}
           <div className="flex items-center">
-            <span className="font-semibold">TripEase</span>
+            <span className="font-bold text-2xl">TripEase</span>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
@@ -230,7 +245,7 @@ export function TripEaseInterfaceComponent() {
                         <Calendar
                           mode="single"
                           selected={startDate}
-                          onSelect={setStartDate}
+                          onSelect={handleStartDateChange}
                           disabled={isDateDisabled}
                           initialFocus
                         />
@@ -246,8 +261,8 @@ export function TripEaseInterfaceComponent() {
                         <Calendar
                           mode="single"
                           selected={endDate}
-                          onSelect={setEndDate}
-                          disabled={isDateDisabled}
+                          onSelect={handleEndDateChange}
+                          disabled={(date) => isDateDisabled(date) || (startDate ? date <= startDate : false)}
                           initialFocus
                         />
                       </PopoverContent>
@@ -281,7 +296,7 @@ export function TripEaseInterfaceComponent() {
           </ScrollArea>
 
           {/* Scroll to bottom button */}
-          {showScrollButton && (
+          {/* {showScrollButton && (
             <Button
               className="absolute bottom-4 right-4 rounded-full shadow-md"
               size="icon"
@@ -290,7 +305,7 @@ export function TripEaseInterfaceComponent() {
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
-          )}
+          )} */}
         </div>
 
         {/* Input area */}
@@ -320,7 +335,7 @@ export function TripEaseInterfaceComponent() {
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 16 16"
                 fill="none"
-                className="h-4 w-4 m-1 m-0"
+                className="h-4 w-4 m-1 md:m-0"
                 strokeWidth="2"
               >
                 <path

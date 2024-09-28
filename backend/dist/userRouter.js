@@ -26,24 +26,22 @@ exports.userRouter.post("/signup", (req, res) => __awaiter(void 0, void 0, void 
     const password = req.body.password;
     const parsedInput = types_1.signupTypes.safeParse({ firstName, lastName, email, password });
     if (!parsedInput.success) {
-        var issues = [];
-        parsedInput.error.issues.map((issue) => {
-            issues.push(issue.message);
-        });
         return res.status(404).json({
-            message: issues
+            status: 404,
+            message: parsedInput.error.issues[0]
         });
     }
     const user = yield schema_1.User.findOne({ email });
     if (user) {
         return res.status(405).json({
+            status: 405,
             message: "This email is already registered with us"
         });
     }
     const newUser = new schema_1.User({ firstName: parsedInput.data.firstName, lastName: parsedInput.data.lastName, email: parsedInput.data.email, password: parsedInput.data.password });
     yield newUser.save();
     return res.status(200).json({
-        message: "new user registered successfully",
+        status: 200,
         token: jsonwebtoken_1.default.sign(parsedInput.data.email, process.env.JWT_SECRET)
     });
 }));
@@ -51,21 +49,20 @@ exports.userRouter.post("/login", (req, res) => __awaiter(void 0, void 0, void 0
     const { email, password } = req.body;
     const parsedInput = types_1.loginTypes.safeParse({ email, password });
     if (!parsedInput.success) {
-        var issues = [];
-        parsedInput.error.issues.map((issue) => {
-            issues.push(issue.message);
-        });
         return res.status(404).json({
-            message: issues
+            status: 404,
+            message: parsedInput.error.issues[0]
         });
     }
     const findUser = yield schema_1.User.findOne({ email: parsedInput.data.email, password: parsedInput.data.password });
     if (!findUser) {
         return res.status(411).json({
+            status: 411,
             message: "No user found with given credentials"
         });
     }
     return res.status(200).json({
+        status: 200,
         token: jsonwebtoken_1.default.sign(parsedInput.data.email, process.env.JWT_SECRET)
     });
 }));
