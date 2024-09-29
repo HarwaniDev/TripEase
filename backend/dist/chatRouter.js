@@ -28,6 +28,11 @@ exports.chatRouter = (0, express_1.default)();
 exports.chatRouter.post("/newchat", middleware_1.Middleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const email = req.headers['email'];
     const user = yield schema_1.User.findOne({ email: email });
+    if (!user) {
+        return res.status(404).send({
+            message: "user not authenticated"
+        });
+    }
     const newChat = new schema_1.Chat({ sender: user === null || user === void 0 ? void 0 : user._id });
     yield newChat.save();
     user === null || user === void 0 ? void 0 : user.chats.push(newChat._id);
@@ -41,6 +46,13 @@ exports.chatRouter.post("/send", middleware_1.Middleware, (req, res) => __awaite
     var _d, _e;
     const { message } = req.body;
     const chatId = req.query.id;
+    const email = req.headers["email"];
+    const user = yield schema_1.User.findOne({ email: email });
+    if (!user) {
+        return res.status(404).send({
+            message: "user not authenticated"
+        });
+    }
     const chat = yield schema_1.Chat.findById({ _id: chatId });
     chat === null || chat === void 0 ? void 0 : chat.messages.push({
         "role": "user",
@@ -86,6 +98,11 @@ exports.chatRouter.get("/gethistory", middleware_1.Middleware, (req, res) => __a
     const email = req.headers['email'];
     const user = yield schema_1.User.findOne({ email: email });
     const chats = yield schema_1.Chat.find({ sender: user === null || user === void 0 ? void 0 : user._id });
+    if (!user) {
+        return res.status(404).send({
+            message: "user not authenticated"
+        });
+    }
     return res.status(200).json({
         status: 200,
         history: chats

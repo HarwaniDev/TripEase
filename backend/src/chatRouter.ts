@@ -8,7 +8,11 @@ export const chatRouter = express();
 chatRouter.post("/newchat", Middleware, async (req, res) => {
   const email = req.headers['email'];
   const user = await User.findOne({ email: email });
-
+  if(!user){
+    return res.status(404).send({
+      message: "user not authenticated"
+    })
+  }
   const newChat = new Chat({ sender: user?._id });
   await newChat.save();
 
@@ -23,7 +27,13 @@ chatRouter.post("/newchat", Middleware, async (req, res) => {
 chatRouter.post("/send", Middleware, async (req, res) => {
   const { message } = req.body;
   const chatId = req.query.id;
-
+  const email = req.headers["email"];
+  const user = await User.findOne({email: email});
+  if(!user){
+    return res.status(404).send({
+      message: "user not authenticated"
+    })
+  }
   const chat = await Chat.findById({ _id: chatId });
 
   chat?.messages.push({
@@ -63,7 +73,11 @@ chatRouter.get("/gethistory", Middleware, async (req, res) => {
   const email = req.headers['email'];
   const user = await User.findOne({ email: email });
   const chats = await Chat.find({sender: user?._id})
-
+  if(!user){
+    return res.status(404).send({
+      message: "user not authenticated"
+    })
+  }
   return res.status(200).json({
     status: 200,
     history: chats
