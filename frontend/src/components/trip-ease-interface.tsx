@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
@@ -8,9 +8,48 @@ import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { Menu, MessageSquare, Settings, Sun, Moon, LogOut } from 'lucide-react'
+import { Menu, MessageSquare, Settings, Sun, Moon, LogOut, Mic } from 'lucide-react'
 import { addDays } from 'date-fns'
 import { useRouter } from 'next/navigation'
+
+interface IWindow extends Window {
+  webkitSpeechRecognition: new () => SpeechRecognition;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onend: () => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  start: () => void;
+  stop: () => void;
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  isFinal: boolean;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
 
 type ChatHistory = {
   _id: string
@@ -26,72 +65,112 @@ type Message = {
   isStreaming?: boolean
 }
 
-export function TripEaseInterfaceComponent() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+export function TripEaseInterfaceComponent(): JSX.Element {
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
-  const [darkMode, setDarkMode] = useState(false)
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [darkMode, setDarkMode] = useState<boolean>(false)
+  const [from, setFrom] = useState<string>("")
+  const [to, setTo] = useState<string>("")
   const [startDate, setStartDate] = useState<Date | undefined>(undefined)
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
   const [messages, setMessages] = useState<Message[]>([])
-  const [inputMessage, setInputMessage] = useState('')
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [inputMessage, setInputMessage] = useState<string>('')
+  const [isStreaming, setIsStreaming] = useState<boolean>(false)
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
-  const [initialChatId, setInitialChatId] = useState("");
+  const [initialChatId, setInitialChatId] = useState<string>("")
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const [isListening, setIsListening] = useState<boolean>(false)
+  const recognition = useRef<SpeechRecognition | null>(null)
 
-  const router = useRouter();
+  const router = useRouter()
 
   useEffect(() => {
     document.body.classList.toggle('dark', darkMode)
   }, [darkMode])
 
-  async function getInitialChatId() {
-    const authorization = localStorage.getItem('token');
-    const headers = {
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const WindowWithSpeechRecognition = window as IWindow;
+      recognition.current = new WindowWithSpeechRecognition.webkitSpeechRecognition()
+      recognition.current.continuous = true
+      recognition.current.interimResults = true
+
+      recognition.current.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          //@ts-ignore
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          }
+        }
+
+        if (finalTranscript !== '') {
+          setInputMessage(prevMessage => prevMessage + ' ' + finalTranscript);
+        }
+      }
+
+      recognition.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error', event.error)
+        setIsListening(false)
+      }
+
+      recognition.current.onend = () => {
+        setIsListening(false)
+      }
+    }
+  }, [])
+
+  const toggleListening = (): void => {
+    if (isListening) {
+      recognition.current?.stop()
+    } else {
+      recognition.current?.start()
+    }
+    setIsListening(!isListening)
+  }
+  async function getInitialChatId(): Promise<void> {
+    const authorization = localStorage.getItem('token')
+    const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(authorization && { "authorization": authorization }),
-    };
+    }
     try {
-      // First, try to fetch the chat history
       const historyResponse = await fetch('http://localhost:3000/chat/gethistory', {
         headers: headers,
-      });
-      const historyData = await historyResponse.json();
+      })
+      const historyData = await historyResponse.json()
       
       if (historyData.status === 200 && historyData.history.length > 0) {
-        // If there's existing chat history, use the most recent chat
-        const mostRecentChat = historyData.history[0];
-        setInitialChatId(mostRecentChat._id);
-        setSelectedChatId(mostRecentChat._id);
-        setChatHistory(historyData.history);
+        const mostRecentChat = historyData.history[0]
+        setInitialChatId(mostRecentChat._id)
+        setSelectedChatId(mostRecentChat._id)
+        setChatHistory(historyData.history)
       } else {
-        // If no chat history, create a new chat
         const newChatResponse = await fetch("http://localhost:3000/chat/newchat", {
           method: "POST",
           headers: headers,
-        });
-        const newChatData = await newChatResponse.json();
-        setInitialChatId(newChatData.id);
-        setSelectedChatId(newChatData.id);
+        })
+        const newChatData = await newChatResponse.json()
+        setInitialChatId(newChatData.id)
+        setSelectedChatId(newChatData.id)
         setChatHistory([{
           _id: newChatData.id,
           messages: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        }]);
+        }])
       }
     } catch (error) {
-      console.error('Error initializing chat:', error);
+      console.error('Error initializing chat:', error)
     }
   }
 
   useEffect(() => {
-    getInitialChatId();
+    getInitialChatId()
   }, [])
 
-  const createNewChat = async () => {
+  const createNewChat = async (): Promise<void> => {
     const token = localStorage.getItem('token')
     try {
       const response = await fetch('http://localhost:3000/chat/newchat', {
@@ -103,8 +182,6 @@ export function TripEaseInterfaceComponent() {
       })
       const data = await response.json()
       if (data.status === 200) {
-        console.log(data.id);
-        
         const newChat: ChatHistory = {
           _id: data.id,
           messages: [],
@@ -119,21 +196,17 @@ export function TripEaseInterfaceComponent() {
         setStartDate(undefined)
         setEndDate(undefined)
         setInputMessage('')
-        setInitialChatId(newChat._id)  // Update the initialChatId
+        setInitialChatId(newChat._id)
       }
     } catch (error) {
       console.error('Error creating new chat:', error)
     }
   }
 
-  // const handleNewChat = () => {
-  //   createNewChat
-  // }
-  const handleChatSelect = async (chatId: string) => {
+  const handleChatSelect = async (chatId: string): Promise<void> => {
     setSelectedChatId(chatId)
     const selectedChat = chatHistory.find(chat => chat._id === chatId)
     if (selectedChat) {
-      // Omit the first two messages
       setMessages(selectedChat.messages.slice(2))
     } else {
       const token = localStorage.getItem('token')
@@ -145,7 +218,6 @@ export function TripEaseInterfaceComponent() {
         })
         const data = await response.json()
         if (data.status === 200) {
-          // Omit the first two messages
           setMessages(data.chat.messages.slice(2))
           setChatHistory(prev => prev.map(chat => 
             chat._id === chatId ? { ...chat, messages: data.chat.messages } : chat
@@ -157,38 +229,38 @@ export function TripEaseInterfaceComponent() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push("/");
+  const handleLogout = (): void => {
+    localStorage.removeItem('token')
+    router.push("/")
   }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const isDateDisabled = (date: Date) => {
+  const isDateDisabled = (date: Date): boolean => {
     return date < today
   }
 
-  const handleStartDateChange = (date: Date | undefined) => {
+  const handleStartDateChange = (date: Date | undefined): void => {
     setStartDate(date)
     if (date && endDate && date > endDate) {
       setEndDate(addDays(date, 1))
     }
   }
 
-  const handleEndDateChange = (date: Date | undefined) => {
+  const handleEndDateChange = (date: Date | undefined): void => {
     if (date && startDate && date < startDate) {
       setStartDate(addDays(date, -1))
     }
     setEndDate(date)
   }
 
-  const generateBotResponse = async (userMessage: string) => {
-    const authorization = localStorage.getItem('token');
-    const headers = {
+  const generateBotResponse = async (userMessage: string): Promise<string> => {
+    const authorization = localStorage.getItem('token')
+    const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(authorization && { "authorization": authorization }),
-    };
+    }
     try {
       const response = await fetch(`http://localhost:3000/chat/send?id=${initialChatId}`, {
         method: "POST",
@@ -196,41 +268,34 @@ export function TripEaseInterfaceComponent() {
         body: JSON.stringify({
           message: userMessage
         })
-      });
-      const data = await response.json();
-      return data.response;
+      })
+      const data = await response.json()
+      return data.response
     } catch (error) {
-      console.error("Error generating bot response:", error);
-      return "Sorry, I couldn't process your request. Please try again.";
+      console.error("Error generating bot response:", error)
+      return "Sorry, I couldn't process your request. Please try again."
     }
   }
 
-  const getChatTitle = (chat: ChatHistory) => {
+  const getChatTitle = (chat: ChatHistory): string => {
     const firstUserMessage = chat.messages.find(msg => msg.role === 'user')
     return firstUserMessage ? firstUserMessage.content.slice(0, 30) + '...' : 'New Chat'
   }
 
-  const simulateBotResponse = async (userMessage: string, chatId: string) => {
+  const simulateBotResponse = async (userMessage: string, chatId: string): Promise<void> => {
     setIsStreaming(true)
-    var botResponse = await generateBotResponse(userMessage);
-    // Convert lines starting with * into HTML list items
-    botResponse = botResponse.replace(/^\*\s*(.*)$/gm, '<li>$1</li>');
-
-    // Wrap list items with <ul> tags
-    botResponse = `<ul>${botResponse}</ul>`;
-
-    // Replace *text* with <strong>text</strong> for bold formatting
-    botResponse = botResponse.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
-
-    // Replace line breaks with <br> for HTML rendering
-    botResponse = botResponse.replace(/\n/g, '<br>');
+    var botResponse = await generateBotResponse(userMessage)
+    botResponse = botResponse.replace(/^\*\s*(.*)$/gm, '<li>$1</li>')
+    botResponse = `<ul>${botResponse}</ul>`
+    botResponse = botResponse.replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+    botResponse = botResponse.replace(/\n/g, '<br>')
 
     const newMessage: Message = { id: Date.now().toString(), content: '', role: 'bot', isStreaming: true }
     setMessages(prev => [...prev, newMessage])
 
     if (botResponse && typeof botResponse === 'string') {
       for (let i = 0; i < botResponse.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 20)) // Adjust the delay as needed
+        await new Promise(resolve => setTimeout(resolve, 20))
         setMessages(prev =>
           prev.map(msg =>
             msg.id === newMessage.id
@@ -252,13 +317,12 @@ export function TripEaseInterfaceComponent() {
     setIsStreaming(false)
   }
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (): Promise<void> => {
     if (inputMessage.trim() === '') return
     const userMessage: Message = { id: Date.now().toString(), content: inputMessage, role: 'user' }
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
 
-    // Update the chat history
     setChatHistory(prev => prev.map(chat => 
       chat._id === selectedChatId 
         ? { ...chat, messages: [...chat.messages, userMessage] }
@@ -266,6 +330,7 @@ export function TripEaseInterfaceComponent() {
     ))
     await simulateBotResponse(inputMessage, selectedChatId!)
   }
+
 
 
 
@@ -414,49 +479,57 @@ export function TripEaseInterfaceComponent() {
 
       {/* Input area */}
       <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}>
-        <div className="max-w-3xl mx-auto relative">
-          <Textarea
-            placeholder="Message TripEase..."
-            className={`w-full pr-10 ${darkMode ? 'bg-gray-700 border-gray-600 focus:border-gray-500 text-gray-100' : 'bg-white border-gray-300 focus:border-gray-400 text-gray-900'}`}
-            rows={1}
-            onChange={(e) => {
-              if (from.length > 0 && to.length > 0 && startDate && endDate) {
-                var msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth() + 1}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}. Give details of flights and hotels.`
-                setInputMessage(msg + " " + e.target.value)
-              }
-              else {
-                setInputMessage(e.target.value)
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSendMessage()
-              }
-            }}
-          />
-          <Button
-            className="absolute right-2 top-1/2 transform -translate-y-1/2"
-            size="icon"
-            variant="ghost"
-            onClick={handleSendMessage}
-            disabled={isStreaming}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 16 16"
-              fill="none"
-              className="h-4 w-4 m-1 md:m-0"
-              strokeWidth="2"
-            >
-              <path
-                d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z"
-                fill="currentColor"
-              ></path>
-            </svg>
-          </Button>
-        </div>
-      </div>
+    <div className="max-w-3xl mx-auto relative">
+      <Textarea
+        placeholder="Message TripEase..."
+        className={`w-full pr-20 ${darkMode ? 'bg-gray-700 border-gray-600 focus:border-gray-500 text-gray-100' : 'bg-white border-gray-300 focus:border-gray-400 text-gray-900'}`}
+        rows={1}
+        
+        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+          if (from.length > 0 && to.length > 0 && startDate && endDate) {
+            const msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth() + 1}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}. Give details of flights and hotels.`
+            setInputMessage(msg + " " + e.target.value)
+          } else {
+            setInputMessage(e.target.value)
+          }
+        }}
+        onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            handleSendMessage()
+          }
+        }}
+      />
+      <Button
+        className="absolute right-12 top-1/2 transform -translate-y-1/2"
+        size="icon"
+        variant="ghost"
+        onClick={toggleListening}
+      >
+        <Mic className={`h-4 w-4 ${isListening ? 'text-red-500' : ''}`} />
+      </Button>
+      <Button
+        className="absolute right-2 top-1/2 transform -translate-y-1/2"
+        size="icon"
+        variant="ghost"
+        onClick={handleSendMessage}
+        disabled={isStreaming}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 16 16"
+          fill="none"
+          className="h-4 w-4 m-1 md:m-0"
+          strokeWidth="2"
+        >
+          <path
+            d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z"
+            fill="currentColor"
+          ></path>
+        </svg>
+      </Button>
+    </div>
+  </div>
     </div>
   </div>
   )
