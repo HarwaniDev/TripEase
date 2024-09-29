@@ -328,6 +328,9 @@ export function TripEaseInterfaceComponent(): JSX.Element {
         ? { ...chat, messages: [...chat.messages, userMessage] }
         : chat
     ))
+    setFrom("");
+    setTo("");
+
     await simulateBotResponse(inputMessage, selectedChatId!)
   }
 
@@ -489,10 +492,10 @@ export function TripEaseInterfaceComponent(): JSX.Element {
           if (from.length > 0 && to.length > 0 && startDate && endDate) {
             const msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth() + 1}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth() + 1}/${endDate.getFullYear()}. Give details of flights and hotels.`
             setInputMessage(msg + " " + e.target.value)
-            setFrom("");
-            setTo("");
+            
           } else {
             setInputMessage(e.target.value)
+            
           }
         }}
         onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
