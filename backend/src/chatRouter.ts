@@ -19,48 +19,6 @@ chatRouter.post("/newchat", Middleware, async (req, res) => {
     id: newChat._id
   })
 });
-// for sumeet
-// -----------------------------------------------
-//http://localhost:3000/chat/send
-chatRouter.post("/send", async (req, res) => {
-  const { message } = req.body;
-  const chatId = req.query.id;
-
-  const chat = await Chat.findById({ _id: chatId });
-
-  chat?.messages.push({
-    "role": "user",
-    "content": message as string
-  });
-
-  const chatCompletion = await groq.chat.completions.create({
-    "messages": chat?.messages,
-    "model": "llama3-70b-8192",
-    "temperature": 1,
-    "max_tokens": 1024,
-    "top_p": 1,
-    "stream": true,
-    "stop": null
-  });
-
-  var ans = [];
-  for await (const chunk of chatCompletion) {
-    ans.push(chunk.choices[0]?.delta?.content || '');
-  }
-  var readableAns = ans.join("");
-  chat?.messages.push({
-    "role": "assistant",
-    content: readableAns
-  });
-
-  await chat?.save();
-
-  return res.status(200).json({
-    message: "done",
-    response: readableAns
-  })
-})
-// -----------------------------------------------------
 
 chatRouter.post("/send", Middleware, async (req, res) => {
   const { message } = req.body;
