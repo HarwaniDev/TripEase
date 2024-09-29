@@ -76,10 +76,18 @@ exports.chatRouter.post("/send", middleware_1.Middleware, (req, res) => __awaite
         "role": "assistant",
         content: readableAns
     });
-    // console.log(readableAns);
     yield (chat === null || chat === void 0 ? void 0 : chat.save());
     return res.status(200).json({
         message: "done",
         response: readableAns
+    });
+}));
+exports.chatRouter.get("/gethistory", middleware_1.Middleware, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const email = req.headers['email'];
+    const user = yield schema_1.User.findOne({ email: email });
+    const chats = yield schema_1.Chat.find({ sender: user === null || user === void 0 ? void 0 : user._id });
+    return res.status(200).json({
+        status: 200,
+        history: chats
     });
 }));

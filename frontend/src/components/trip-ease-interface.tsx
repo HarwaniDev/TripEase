@@ -13,9 +13,10 @@ import { addDays } from 'date-fns'
 import { useRouter } from 'next/navigation'
 
 type ChatHistory = {
-  id: string
-  title: string
-  date: string
+  _id: string
+  messages: Message[]
+  createdAt: string
+  updatedAt: string
 }
 
 type Message = {
@@ -25,20 +26,23 @@ type Message = {
   isStreaming?: boolean
 }
 
-const chatHistory: ChatHistory[] = [
-  { id: '1', title: 'Paris Trip Planning', date: 'Yesterday' },
-  { id: '2', title: 'Tokyo Itinerary', date: 'Yesterday' },
-  { id: '3', title: 'New York City Hotels', date: 'Yesterday' },
-  { id: '4', title: 'Bali Beach Recommendations', date: 'Yesterday' },
-  { id: '5', title: 'Rome Historical Sites', date: 'Previous 7 Days' },
-  { id: '6', title: 'London Budget Travel', date: 'Previous 7 Days' },
-  { id: '7', title: 'Barcelona Food Tour', date: 'Previous 7 Days' },
-  { id: '8', title: 'Sydney Opera House Tickets', date: 'Previous 7 Days' },
-  { id: '9', title: 'Amsterdam Canal Cruise', date: 'Previous 7 Days' },
-]
+// const chatHistory: ChatHistory[] = [
+//   { id: '1', title: 'Paris Trip Planning', date: 'Yesterday' },
+//   { id: '2', title: 'Tokyo Itinerary', date: 'Yesterday' },
+//   { id: '3', title: 'New York City Hotels', date: 'Yesterday' },
+//   { id: '4', title: 'Bali Beach Recommendations', date: 'Yesterday' },
+//   { id: '5', title: 'Rome Historical Sites', date: 'Previous 7 Days' },
+//   { id: '6', title: 'London Budget Travel', date: 'Previous 7 Days' },
+//   { id: '7', title: 'Barcelona Food Tour', date: 'Previous 7 Days' },
+//   { id: '8', title: 'Sydney Opera House Tickets', date: 'Previous 7 Days' },
+//   { id: '9', title: 'Amsterdam Canal Cruise', date: 'Previous 7 Days' },
+// ]
+
+
 
 export function TripEaseInterfaceComponent() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [darkMode, setDarkMode] = useState(false)
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -47,6 +51,7 @@ export function TripEaseInterfaceComponent() {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const [initialChatId, setInitialChatId] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
@@ -78,6 +83,64 @@ export function TripEaseInterfaceComponent() {
   }, [])
 
 
+  useEffect(() => {
+    fetchChatHistory()
+  }, [])
+
+  const fetchChatHistory = async () => {
+    const token = localStorage.getItem('token')
+    try {
+      const response = await fetch('http://localhost:3000/chat/gethistory', {
+        headers: {
+          'authorization': `${token}`
+        }
+      })
+      const data = await response.json()
+      if (data.status === 200) {
+        setChatHistory(data.history)
+      }
+    } catch (error) {
+      console.error('Error fetching chat history:', error)
+    }
+  }
+  const createNewChat = async () => {
+    const token = localStorage.getItem('token')
+    try {
+      const response = await fetch('http://localhost:3000/chat/newchat', {
+        method: 'POST',
+        headers: {
+          'authorization': `${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      const data = await response.json()
+      if (data.status === 200) {
+        const newChat: ChatHistory = {
+          _id: data.id,
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+        setChatHistory(prev => [newChat, ...prev])
+        setSelectedChatId(newChat._id)
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error)
+    }
+  }
+
+  const handleNewChat = () => {
+    createNewChat()
+  }
+  const handleChatSelect = (chatId: string) => {
+    setSelectedChatId(chatId)
+    const selectedChat = chatHistory.find(chat => chat._id === chatId)
+    if (selectedChat) {
+      setMessages(selectedChat.messages)
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     router.push("/");
@@ -105,48 +168,68 @@ export function TripEaseInterfaceComponent() {
     setEndDate(date)
   }
 
+
   const generateBotResponse = async (userMessage: string) => {
-    var botResponse;
     const authorization = localStorage.getItem('token');
     const headers = {
       "Content-Type": "application/json",
-      ...(authorization && { "authorization": authorization }), // Add authorization only if it's not null
+      ...(authorization && { "authorization": authorization }),
     };
-    await fetch(`http://localhost:3000/chat/send?id=${initialChatId}`, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify({
-        message: inputMessage
-      })
-    }).then((res) => {
-      res.json()
-        .then((data) => {
-          botResponse = data.response
+    try {
+      const response = await fetch(`http://localhost:3000/chat/send?id=${initialChatId}`, {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          message: userMessage
         })
-    })
-    return botResponse;
+      });
+      const data = await response.json();
+      return data.response;
+    } catch (error) {
+      console.error("Error generating bot response:", error);
+      return "Sorry, I couldn't process your request. Please try again.";
+    }
   }
+  const getChatTitle = (chat: ChatHistory) => {
+    const firstUserMessage = chat.messages.find(msg => msg.role === 'user')
+    return firstUserMessage ? firstUserMessage.content.slice(0, 30) + '...' : 'New Chat'
+  }
+
+
+
 
   const simulateBotResponse = async (userMessage: string) => {
     setIsStreaming(true)
-    const botMessage = await generateBotResponse(userMessage)
+    var botResponse = await generateBotResponse(userMessage);
+    // Convert lines starting with * into HTML list items
+    botResponse = botResponse.replace(/^\*\s*(.*)$/gm, '<li>$1</li>');
+
+    // Wrap list items with <ul> tags
+    botResponse = `<ul>${botResponse}</ul>`;
+
+    // Replace *text* with <strong>text</strong> for bold formatting
+    botResponse = botResponse.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+
+    // Replace line breaks with <br> for HTML rendering
+    botResponse = botResponse.replace(/\n/g, '<br>');
+
     const newMessage: Message = { id: Date.now().toString(), content: '', role: 'bot', isStreaming: true }
     setMessages(prev => [...prev, newMessage])
 
-    if (botMessage && typeof botMessage === 'string') {
-      //@ts-ignore
-      for (let i = 0; i < botMessage.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 20))
+    if (botResponse && typeof botResponse === 'string') {
+      for (let i = 0; i < botResponse.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 20)) // Adjust the delay as needed
         setMessages(prev =>
           prev.map(msg =>
             msg.id === newMessage.id
-            //@ts-ignore
-              ? { ...msg, content: botMessage.slice(0, i + 1) }
+              ? { ...msg, content: botResponse.slice(0, i + 1) }
               : msg
           )
         )
       }
     }
+
+
 
     setMessages(prev =>
       prev.map(msg =>
@@ -155,14 +238,12 @@ export function TripEaseInterfaceComponent() {
           : msg
       )
     )
-    console.log(messages);
-    
+
     setIsStreaming(false)
   }
 
   const handleSendMessage = async () => {
     if (inputMessage.trim() === '') return
-
     const userMessage: Message = { id: Date.now().toString(), content: inputMessage, role: 'user' }
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
@@ -179,16 +260,21 @@ export function TripEaseInterfaceComponent() {
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
             <Menu className="h-6 w-6" />
           </Button>
-          <Button variant="outline" size="lg">
+          <Button variant="outline" size="lg" onClick={handleNewChat}>
             New chat
           </Button>
         </div>
         <ScrollArea className="flex-grow">
           <div className="p-2 space-y-2">
             {chatHistory.map((chat) => (
-              <Button key={chat.id} variant="ghost" className="w-full justify-start text-left text-wrap">
+              <Button
+                key={chat._id}
+                variant="ghost"
+                className="w-full justify-start text-left text-wrap"
+                onClick={() => handleChatSelect(chat._id)}
+              >
                 <MessageSquare className="mr-2 h-4 w-4 flex-shrink-0" />
-                <span >{chat.title}</span>
+                <span>{getChatTitle(chat)}</span>
               </Button>
             ))}
           </div>
@@ -246,8 +332,8 @@ export function TripEaseInterfaceComponent() {
                     <h2 className="text-2xl font-bold mb-4">Plan your trip with TripEase</h2>
                   </div>
                   <div className="flex space-x-4 w-full">
-                    <Input placeholder="From" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
-                    <Input placeholder="To" className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
+                    <Input placeholder="From" value={from} onChange={(e) => setFrom(e.target.value)} className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
+                    <Input placeholder="To" value={to} onChange={(e) => setTo(e.target.value)} className={`flex-1 ${darkMode ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900'}`} />
                   </div>
                   <div className="flex space-x-4 w-full">
                     <Popover>
@@ -286,9 +372,9 @@ export function TripEaseInterfaceComponent() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {messages.map((message) => (
+                  {messages.map((message, index) => (
                     <div
-                      key={message.id}
+                      key={index}
                       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
@@ -298,9 +384,9 @@ export function TripEaseInterfaceComponent() {
                             ? 'bg-gray-700 text-gray-100'
                             : 'bg-gray-200 text-gray-900'
                           }`}
+                        dangerouslySetInnerHTML={{ __html: message.content }}
                       >
-                        {message.content}
-                        {message.isStreaming && <span className="animate-pulse ml-1">...</span>}
+                        {/* {message.content} */}
                       </div>
                     </div>
                   ))}
@@ -317,8 +403,16 @@ export function TripEaseInterfaceComponent() {
               placeholder="Message TripEase..."
               className={`w-full pr-10 ${darkMode ? 'bg-gray-700 border-gray-600 focus:border-gray-500 text-gray-100' : 'bg-white border-gray-300 focus:border-gray-400 text-gray-900'}`}
               rows={1}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={(e) => {
+                if (from.length > 0 && to.length > 0 && startDate && endDate) {
+                  var msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth()}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth()}/${endDate.getFullYear()}`
+                  setInputMessage(msg + " " + e.target.value)
+                }
+                else {
+                  setInputMessage(e.target.value)
+                }
+
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
