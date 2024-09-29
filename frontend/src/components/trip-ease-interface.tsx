@@ -98,6 +98,10 @@ export function TripEaseInterfaceComponent() {
       const data = await response.json()
       if (data.status === 200) {
         setChatHistory(data.history)
+        if (data.history.length > 0) {
+          setSelectedChatId(data.history[0]._id)
+          setMessages(data.history[0].messages)
+        }
       }
     } catch (error) {
       console.error('Error fetching chat history:', error)
@@ -130,14 +134,36 @@ export function TripEaseInterfaceComponent() {
     }
   }
 
+  
+
   const handleNewChat = () => {
     createNewChat()
   }
-  const handleChatSelect = (chatId: string) => {
+  const handleChatSelect = async (chatId: string) => {
     setSelectedChatId(chatId)
     const selectedChat = chatHistory.find(chat => chat._id === chatId)
     if (selectedChat) {
       setMessages(selectedChat.messages)
+    } else {
+      // If the chat is not in the local state, fetch it from the server
+      const token = localStorage.getItem('token')
+      try {
+        const response = await fetch(`http://localhost:3000/chat/getchat?id=${chatId}`, {
+          headers: {
+            'authorization': `${token}`
+          }
+        })
+        const data = await response.json()
+        if (data.status === 200) {
+          setMessages(data.chat.messages)
+          // Update the chat history with the fetched chat
+          setChatHistory(prev => prev.map(chat => 
+            chat._id === chatId ? { ...chat, messages: data.chat.messages } : chat
+          ))
+        }
+      } catch (error) {
+        console.error('Error fetching chat:', error)
+      }
     }
   }
 
@@ -198,7 +224,7 @@ export function TripEaseInterfaceComponent() {
 
 
 
-  const simulateBotResponse = async (userMessage: string) => {
+  const simulateBotResponse = async (userMessage: string,chatId: string) => {
     setIsStreaming(true)
     var botResponse = await generateBotResponse(userMessage);
     // Convert lines starting with * into HTML list items
@@ -243,12 +269,19 @@ export function TripEaseInterfaceComponent() {
   }
 
   const handleSendMessage = async () => {
-    if (inputMessage.trim() === '') return
+    if (inputMessage.trim() === '' || !selectedChatId) return
     const userMessage: Message = { id: Date.now().toString(), content: inputMessage, role: 'user' }
     setMessages(prev => [...prev, userMessage])
     setInputMessage('')
 
-    await simulateBotResponse(inputMessage)
+    // Update the chat history
+    setChatHistory(prev => prev.map(chat => 
+      chat._id === selectedChatId 
+        ? { ...chat, messages: [...chat.messages, userMessage] }
+        : chat
+    ))
+
+    await simulateBotResponse(inputMessage, selectedChatId)
   }
 
 
@@ -405,7 +438,7 @@ export function TripEaseInterfaceComponent() {
               rows={1}
               onChange={(e) => {
                 if (from.length > 0 && to.length > 0 && startDate && endDate) {
-                  var msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth()}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth()}/${endDate.getFullYear()}`
+                  var msg = `plan a trip from ${from} to ${to} between ${startDate.getDate()}/${startDate.getMonth()}/${startDate.getFullYear()} and ${endDate.getDate()}/${endDate.getMonth()}/${endDate.getFullYear()}. Give details of flights and hotels.`
                   setInputMessage(msg + " " + e.target.value)
                 }
                 else {
